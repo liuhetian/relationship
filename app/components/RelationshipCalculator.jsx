@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import relationship from 'relationship.js';
+import ReactMarkdown from 'react-markdown';
 
 export default function RelationshipCalculator() {
   const [mode, setMode] = useState('零语用');  // 区域模式
@@ -9,6 +10,9 @@ export default function RelationshipCalculator() {
   const [direction, setDirection] = useState(false);  // 称呼方式
   const [input, setInput] = useState('');  // 输入的称谓
   const [result, setResult] = useState([]);  // 计算结果
+  const [loading, setLoading] = useState(false); // 加载状态
+  const [streamingResult, setStreamingResult] = useState(''); // 流式传输的结果
+  const [isStreaming, setIsStreaming] = useState(false); // 是否正在流式传输
 
   // 亲属关系按钮
   const relations = ['父', '母', '夫', '妻', '兄', '弟', '姐', '妹', '子', '女'];
@@ -36,6 +40,49 @@ export default function RelationshipCalculator() {
     setInput(newInput);
   };
 
+  const fetchAIResponse = async (query) => {
+    setLoading(true);
+    setIsStreaming(true);
+    setStreamingResult('');
+    
+    try {
+      const response = await fetch('/api/ai-relationship', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ 
+          query,
+          sex: sex,
+          direction: direction
+        }),
+      });
+      
+      if (!response.ok) {
+        throw new Error('网络响应不正常');
+      }
+      
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      
+      while (true) {
+        const { done, value } = await reader.read();
+        
+        if (done) {
+          break;
+        }
+        
+        const text = decoder.decode(value);
+        setStreamingResult((prev) => prev + text);
+      }
+    } catch (error) {
+      console.error('获取AI响应时出错:', error);
+      setStreamingResult('获取AI响应时出错，请重试');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleCalculate = () => {
     console.log("当前输入:", input); // 调试输出
     try {
@@ -45,18 +92,41 @@ export default function RelationshipCalculator() {
         reverse: direction,
         mode: mode
       };
-      const result = relationship(options);
-      console.log("计算结果:", result); // 调试输出
-      setResult(Array.isArray(result) ? result : [result]);
+      const calculatedResult = relationship(options);
+      console.log("计算结果:", calculatedResult); // 调试输出
+      
+      if (!calculatedResult || 
+          (Array.isArray(calculatedResult) && calculatedResult.length === 0) || 
+          calculatedResult === '未知关系') {
+        // 如果没有结果或结果为空，调用后端API
+        setResult(['正在查询更多可能的称呼...']);
+        fetchAIResponse(input);
+      } else {
+        setIsStreaming(false);
+        setStreamingResult('');
+        setResult(Array.isArray(calculatedResult) ? calculatedResult : [calculatedResult]);
+      }
     } catch (error) {
       console.error("计算出错:", error); // 输出错误信息
-      setResult(['计算出错']);
+      setResult(['计算出错，尝试使用AI查询...']);
+      fetchAIResponse(input);
     }
   };
 
   const handleClear = () => {
     setInput('');
     setResult([]);
+    setStreamingResult('');
+    setIsStreaming(false);
+  };
+
+  // 将普通结果数组转换为适合Markdown展示的字符串
+  const resultToMarkdown = () => {
+    if (isStreaming) {
+      return streamingResult;
+    } else {
+      return result.length > 0 ? result.join('/') : '';
+    }
   };
 
   return (
@@ -144,26 +214,32 @@ export default function RelationshipCalculator() {
             <button
               onClick={handleClear}
               className="button-red"
+              disabled={loading}
             >
               清空
             </button>
             <button
               onClick={handleCalculate}
               className="button-green"
+              disabled={loading}
             >
-              计算
+              {loading ? '查询中...' : '计算'}
             </button>
           </div>
         </div>
 
         <div className="result-area">
-          <div className="mb-2 font-bold">计算结果：</div>
-          <textarea
-            value={result.join('/')}
-            readOnly
-            className="w-full p-4 border rounded bg-gray-50 resize-none h-[120px] focus:outline-none"
-            style={{ resize: 'none' }}
-          />
+          <div className="mb-2 font-bold">
+            <span>计算结果：</span>
+          </div>
+          
+          <div className="w-full p-4 border rounded bg-white min-h-[300px] max-h-[500px] overflow-y-auto">
+            <ReactMarkdown>
+              {resultToMarkdown()}
+            </ReactMarkdown>
+          </div>
+          
+          {loading && <div className="mt-2 text-blue-500">AI正在思考...</div>}
         </div>
       </div>
     </div>

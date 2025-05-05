@@ -1,0 +1,33 @@
+# 依赖目录
+node_modules
+npm-debug.log
+
+# 构建输出
+.next
+out
+
+# 开发文件
+*.md
+*.mdx
+.git
+.github
+.vscode
+*.log
+*.lock
+
+# 测试文件
+__tests__
+coverage
+
+# 环境变量文件（除非特别需要）
+.env
+.env.*
+!.env.example
+
+# 缓存
+.npm
+.cache
+
+# Docker自身文件
+Dockerfile
+.dockerignore 
