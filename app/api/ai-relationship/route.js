@@ -31,15 +31,15 @@ export async function POST(request) {
         
         const prompt = `
 我的性别: ${gender}
+对方是: ${query}
 称呼方向: ${directionText}
-关系描述: ${query}
 
-请你输出以上关系应该如何称呼，输出三个结果以及你对此的吐槽：
+请你输出以上关系${directionText}应该如何称呼，输出三个结果以及你对此的吐槽：
 `;
         
         try {
           const chatStream = await openai.chat.completions.create({
-            model: 'deepseek-r1',
+            model: process.env.MODEL_NAME,
             messages: [
               { role: 'system', content: '你是一个爱吐槽人类的人工智能，你的任务是分析以下亲属关系应该如何称呼。' },
               { role: 'user', content: prompt }
